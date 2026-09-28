@@ -1,0 +1,6 @@
+laya==0.3.21
+gradio==5.50.0
+pandas>=2.2,<3
+numpy>=2,<3
+httpx[socks]>=0.28,<0.29
+python-dotenv>=1,<2
