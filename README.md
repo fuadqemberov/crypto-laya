@@ -62,7 +62,11 @@ uv run python -m laya_crypto.cli evaluate --dataset main                        
 uv run python -m laya_crypto.cli backtest --dataset main --model lightgbm --split test
 uv run python -m laya_crypto.cli backtest --dataset main --model laya-<run_id> --split test
 
-# 7. inference
+# 7. paper trading: the model trades a simulated account on live data (no orders, no keys)
+uv run python -m laya_crypto.cli paper run
+uv run python -m laya_crypto.cli paper report
+
+# 8. inference
 uv run python -m laya_crypto.cli predict --symbol BTCUSDT ETHUSDT
 uv run python -m laya_crypto.cli benchmark --symbol BTCUSDT
 uv run python -m laya_crypto.cli dashboard
@@ -88,6 +92,7 @@ uv run python -m laya_crypto.cli dashboard
 | local dashboard (FastAPI + static UI, real job control) | `dashboard/` | below |
 | how it fits together, LAYA APIs used, what was extended and why | — | [ARCHITECTURE](docs/ARCHITECTURE.md) |
 | problems and fixes | — | [TROUBLESHOOTING](docs/TROUBLESHOOTING.md) |
+| paper-trading bot (live data, simulated account, risk manager) | `trading/paper.py` | [PAPER_TRADING](docs/PAPER_TRADING.md) |
 | Colab with results on Google Drive | `notebooks/colab_train.ipynb` | [COLAB](docs/COLAB.md) |
 
 Dashboard tabs: Hardware (live CPU/RAM/GPU), Data (coverage, quality, datasets), Training (start /

@@ -226,6 +226,27 @@ def cmd_dashboard(a):
     uvicorn.run("laya_crypto.dashboard.app:app", host=host, port=port, log_level="info")
 
 
+def cmd_paper(a):
+    from ..trading.paper import PaperBot, report
+
+    if a.action == "run":
+        PaperBot(a.name).run(max_steps=1 if a.once else None)
+    elif a.action == "stop":
+        from ..config import project_path
+
+        d = project_path("artifacts", "paper", a.name)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "STOP").write_text("stop requested\n")
+        print(f"stop requested for paper bot {a.name!r}; it saves its state and exits within seconds")
+    elif a.action == "status":
+        from ..config import project_path
+        from ..utils.io import read_json
+
+        _print(read_json(project_path("artifacts", "paper", a.name, "status.json")) or {"status": "never run"})
+    elif a.action == "report":
+        _print(report(a.name))
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="laya_crypto", description="LAYA crypto research trainer (no live trading)")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -339,6 +360,12 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "benchmark":
             s.add_argument("--n", type=int, default=20)
         s.set_defaults(f=fn)
+
+    s = sub.add_parser("paper", help="paper-trading bot: live public data, simulated account, no orders")
+    s.add_argument("action", choices=["run", "stop", "status", "report"])
+    s.add_argument("--name", default="default", help="account name (separate state per name)")
+    s.add_argument("--once", action="store_true", help="process the next candle close, then exit")
+    s.set_defaults(f=cmd_paper)
 
     s = sub.add_parser("dashboard", help="local web dashboard (127.0.0.1)")
     s.add_argument("--host")

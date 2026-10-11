@@ -93,6 +93,15 @@ as invalid JSON.
 Launched with `cli dashboard` (127.0.0.1:8765). All tabs rendered in headless Chromium with no JS
 errors, showing the real `probe3` runs, metrics, comparison tables and backtests.
 
+## Paper-trading bot
+
+`tests/test_paper_bot.py` (7 tests, fake market): exact fill/fee/slippage arithmetic, stop wins a
+same-candle tie, timeout, every veto, daily-loss halt, restart catching up on missed candles,
+graceful stop, dashboard endpoints. The Paper tab rendered (headless Chromium, no JS errors) on a
+300-candle simulated account with *random* decisions: −7.2%, 75 trades, PF 0.69, daily-loss halt
+triggered. That is what costs do to a model without an edge. It was not run against live
+Binance data here (HTTP 451 from this container).
+
 ## Not executed (ready to run)
 
 - `research` and `deep` profiles, multi-seed runs, LAYA HPO: these need a GPU.

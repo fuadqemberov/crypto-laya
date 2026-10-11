@@ -40,10 +40,11 @@ svg text{fill:var(--muted);font-size:11px}.empty{color:var(--muted);padding:12px
 <section id="experiments"></section>
 <section id="backtest"></section>
 <section id="inference"></section>
+<section id="paper"></section>
 <section id="logs"></section>
 </main>
 <script>
-const TABS=["hardware","data","training","experiments","backtest","inference","logs"];
+const TABS=["hardware","data","training","experiments","backtest","inference","paper","logs"];
 const $=s=>document.querySelector(s);
 const api=async(p,o)=>{const r=await fetch(p,o);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.detail||r.statusText);return j};
 const post=(p,b)=>api(p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});
@@ -148,6 +149,17 @@ async inference(){const syms=await api("/api/symbols");
     $("#iout").innerHTML=`<div class="row"><span class="big ${r.decision==="LONG"?"good":r.decision==="SHORT"?"bad":""}">${esc(r.decision)}</span>${r.abstained?'<span class="pill">abstained (low confidence)</span>':""}${r.stale?'<span class="pill bad">STALE data</span>':""}</div>${probBar(r.probabilities)}
      <div class="row"><span class="pill">data ${esc(r.data_timestamp_utc)} (${r.data_age_minutes} min old, ${esc(r.data_source)})</span><span class="pill">model ${esc(r.model_version.profile)} · seed ${esc(r.model_version.seed)}</span><span class="pill">latency ${r.latency_ms.total} ms (model ${r.latency_ms.model} ms)</span></div>
      ${r.notes.length?`<pre>${esc(r.notes.join("\n"))}</pre>`:""}<div class="muted">${esc(r.disclaimer)}</div>`}catch(e){$("#iout").innerHTML=`<div class="bad">${esc(e.message)}</div>`}}},
+async paper(){const accts=await api("/api/paper");if(!accts.length){$("#paper").innerHTML='<div class="card"><h3>Paper bot</h3><div class="empty">No paper account yet. Start one with <code>python -m laya_crypto.cli paper run</code>. It trades a simulated account on live data and never sends orders.</div></div>';return}
+  const name=state.paper&&accts.includes(state.paper)?state.paper:accts[0];const d=await api(`/api/paper/${encodeURIComponent(name)}`);const r=d.report,s=d.status||{};
+  const pos=Object.values(s.positions||{}).map(p=>({...p,side:p.side>0?"LONG":"SHORT"}));
+  $("#paper").innerHTML=`<div class="row">account <select id="pacc">${accts.map(a=>`<option ${a===name?"selected":""}>${esc(a)}</option>`).join("")}</select><button class="act sec" id="pstop">Stop bot</button><span class="muted">simulated fills on live data · no orders are sent</span></div>
+   <div class="grid"><div class="card"><h3>Equity</h3><div class="big ${r.return_pct>=0?"good":"bad"}">${num(r.final_equity,2)} USDT</div><div>${num(r.return_pct,2)}% · max DD ${num(r.max_drawdown_pct,2)}%</div></div>
+   <div class="card"><h3>Trades</h3><div class="big">${r.trades??0}</div><div>win rate ${num(r.win_rate,3)} · PF ${num(r.profit_factor,3)}</div></div>
+   <div class="card"><h3>Running</h3><div class="big">${num(r.days_running,1)} days</div><div class="muted">since ${esc(r.started_utc)}${r.halted_reason?` · <span class="bad">halted: ${esc(r.halted_reason)}</span>`:""}</div></div></div>
+   <div class="card" style="margin-top:14px"><h3>Equity curve</h3>${line([{name:"equity",color:css('--accent'),pts:d.equity.map(x=>[x.time,x.equity])}],{yfmt:v=>v.toFixed(0)})}</div>
+   <div class="card" style="margin-top:14px"><h3>Open positions</h3>${table(pos,["symbol","side","entry_px","tp_px","sl_px","qty","confidence","funding"])}</div>
+   <div class="card" style="margin-top:14px"><h3>Recent events</h3>${table(d.events.slice(0,100),["ts_utc","event","symbol","decision","veto","reason","net_pnl"])}</div>`;
+  $("#pacc").onchange=()=>{state.paper=$("#pacc").value;show("paper")};$("#pstop").onclick=()=>post(`/api/paper/${encodeURIComponent(name)}/stop`).then(()=>show("paper"))},
 async logs(){const l=await api("/api/logs");$("#logs").innerHTML=`<div class="card"><h3>Logs</h3><div class="row"><select id="lsel">${l.map(x=>`<option>${esc(x)}</option>`).join("")}</select><button class="act sec" id="lgo">Open</button></div><pre id="lout"></pre></div>`;
   $("#lgo").onclick=async()=>{const r=await api(`/api/logs/${encodeURIComponent($("#lsel").value)}?lines=300`);$("#lout").textContent=r.tail};if(l.length)$("#lgo").click()}
 };

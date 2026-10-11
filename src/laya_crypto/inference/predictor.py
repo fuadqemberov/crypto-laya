@@ -36,7 +36,10 @@ def _merge(cached: pd.DataFrame | None, fresh: pd.DataFrame | None, key: str) ->
 
 
 class Predictor:
-    def __init__(self, checkpoint: str | None = None, device: str | None = None):
+    def __init__(self, checkpoint: str | None = None, device: str | None = None, scorer=None):
+        """`scorer`, if given, replaces LAYA: an object with `.version` and
+        `.score(row: pd.Series, state: str) -> np.ndarray` of class probabilities (e.g. a baseline)."""
+        self.scorer = scorer
         self.icfg = load_inference_config()
         self.dcfg = load_data_config()
         self.fcfg = load_features_config()
@@ -112,14 +115,19 @@ class Predictor:
         return row, meta, notes, (t1 - t0) * 1000, (t2 - t1) * 1000
 
     def predict_one(self, symbol: str, tf: str | None = None, offline: bool = False) -> dict:
+        return self.predict_with_row(symbol, tf, offline)[0]
+
+    def predict_with_row(self, symbol: str, tf: str | None = None, offline: bool = False
+                         ) -> tuple[dict, pd.Series | None]:
+        """The prediction plus the feature row it was made from (None when there is no row)."""
         tf = tf or self.icfg.timeframe
         t_start = time.perf_counter()
         try:
             row, meta, notes, data_ms, feat_ms = self.features(symbol, tf, offline)
         except InferenceError as e:
-            return {"symbol": symbol, "timeframe": tf, "error": str(e)}
+            return {"symbol": symbol, "timeframe": tf, "error": str(e)}, None
         if not bool(row.get("bar_present", True)):
-            return {"symbol": symbol, "timeframe": tf, "error": "latest candle missing in data"}
+            return {"symbol": symbol, "timeframe": tf, "error": "latest candle missing in data"}, row
         close_ms = int(row["open_time"]) + tf_ms(tf)
         age_min = (time.time() * 1000 - close_ms) / 60_000
         stale = age_min > self.icfg.max_data_age_minutes
@@ -128,10 +136,13 @@ class Predictor:
         na_fields = [c for c in all_fields if c not in row or pd.isna(row[c])]
         if missing:
             return {"symbol": symbol, "timeframe": tf, "error": f"core features missing (warm-up/data gaps): {missing}",
-                    "data_timestamp_utc": str(pd.to_datetime(close_ms, unit="ms", utc=True))}
+                    "data_timestamp_utc": str(pd.to_datetime(close_ms, unit="ms", utc=True))}, row
         state = serialize_row(row, symbol, tf)
         t_m = time.perf_counter()
-        proba = self.model.predict_proba([state], batch_size=1)[0]
+        if self.scorer is not None:
+            proba, version = self.scorer.score(row, state), self.scorer.version
+        else:
+            proba, version = self.model.predict_proba([state], batch_size=1)[0], self.model.version
         model_ms = (time.perf_counter() - t_m) * 1000
         probs = {c: round(float(p), 4) for c, p in zip(CLASSES, proba, strict=True)}
         top = max(probs, key=probs.get)
@@ -139,14 +150,14 @@ class Predictor:
         return {
             "symbol": symbol, "timeframe": tf, "decision": "WAIT" if abstained else top,
             "model_argmax": top, "abstained": abstained, "abstain_below": self.icfg.abstain_below,
-            "probabilities": probs, "model_version": self.model.version,
+            "probabilities": probs, "model_version": version,
             "data_timestamp_utc": str(pd.to_datetime(close_ms, unit="ms", utc=True)),
             "data_age_minutes": round(age_min, 1), "stale": stale, "data_source": meta["source"],
             "missing_state_fields": na_fields, "notes": notes,
             "latency_ms": {"data": round(data_ms, 1), "features": round(feat_ms, 1), "model": round(model_ms, 1),
                            "total": round((time.perf_counter() - t_start) * 1000, 1)},
             "disclaimer": "research output; probabilities are calibrated classifier scores, not win probabilities",
-        }
+        }, row
 
     def predict_symbols(self, symbols: list[str], tf: str | None = None, offline: bool = False) -> list[dict]:
         return [self.predict_one(s, tf, offline) for s in symbols]

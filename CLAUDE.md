@@ -6,7 +6,8 @@ Guidance for AI assistants working in this repository.
 
 A local research project that fine-tunes the official LAYA decision model (`laya==0.4.2`) to answer
 LONG / SHORT / WAIT on Binance USD-M perpetual futures market states, compares it against simple
-baselines, and backtests everything under identical cost assumptions. **No live trading, no order
+baselines, backtests everything under identical cost assumptions, and can paper-trade the chosen
+model on live public data (`trading/paper.py`, simulated account). **No live trading, no order
 endpoints, no exchange keys.**
 
 ## Commands

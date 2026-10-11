@@ -248,6 +248,25 @@ class InferenceConfig(Strict):
     port: int = 8765
 
 
+class BotConfig(Strict):
+    """Paper-trading bot: the model's decisions executed on a simulated account with live public
+    market data. It never sends orders to an exchange and needs no API key."""
+    model: str = "laya"  # "laya" (models/best) or a baseline name trained on `model_dataset`
+    model_dataset: str | None = None
+    symbols: list[str] = Field(default_factory=lambda: ["BTCUSDT", "ETHUSDT", "SOLUSDT"])
+    timeframe: str = "5m"
+    min_confidence: float = 0.5  # choose on VALIDATION, never on test
+    risk_per_trade: float = 0.005
+    max_leverage: float = 3.0
+    max_positions: int = 3
+    max_position_notional_frac: float = 0.5
+    max_daily_loss: float = 0.03
+    max_drawdown: float = 0.15
+    veto_abnormal: bool = True
+    initial_equity: float = 2000.0
+    bar_delay_seconds: int = 8
+
+
 class HardwareConfig(Strict):
     low_vram_gb: float = 8.0
     high_vram_gb: float = 16.0
@@ -294,6 +313,10 @@ def load_backtest_config() -> BacktestConfig:
 
 def load_inference_config() -> InferenceConfig:
     return InferenceConfig(**_load_yaml("inference"))
+
+
+def load_bot_config() -> BotConfig:
+    return BotConfig(**_load_yaml("bot"))
 
 
 def load_hardware_config() -> HardwareConfig:

@@ -1,0 +1,15 @@
+# Paper-trading bot: live public market data, simulated account, no orders, no API keys.
+model: laya                 # laya = models/best ; or a baseline that won on validation, e.g. lightgbm
+model_dataset: null         # dataset the baseline was trained on (required for baselines)
+symbols: [BTCUSDT, ETHUSDT, SOLUSDT]
+timeframe: 5m               # must match the model's training timeframe
+min_confidence: 0.5         # pick this on the VALIDATION split, never on test
+risk_per_trade: 0.005       # equity lost if the stop is hit (0.5%)
+max_leverage: 3
+max_positions: 3
+max_position_notional_frac: 0.5
+max_daily_loss: 0.03        # no new trades for the rest of the UTC day after -3%
+max_drawdown: 0.15          # no new trades after -15% from the peak
+veto_abnormal: true
+initial_equity: 2000
+bar_delay_seconds: 8        # wait after the candle close so the exchange has published it

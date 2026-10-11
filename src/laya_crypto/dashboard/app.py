@@ -274,3 +274,34 @@ def comparison(dataset: str):
     from ..evaluation.report import write_comparison_report
 
     return {"markdown": write_comparison_report(dataset).read_text(encoding="utf-8")}
+
+
+# ------------------------------------------------------------------------------ paper bot
+@app.get("/api/paper")
+def paper_accounts():
+    root = project_path("artifacts", "paper")
+    return sorted(p.parent.name for p in root.glob("*/state.json")) if root.exists() else []
+
+
+@app.get("/api/paper/{name}")
+def paper_detail(name: str):
+    from ..trading.paper import report
+
+    d = project_path("artifacts", "paper", name)
+    if d.parent != project_path("artifacts", "paper") or not (d / "state.json").exists():
+        raise HTTPException(404, "unknown paper account")
+    rep = report(name)
+    eq = read_jsonl(d / "equity.jsonl")
+    step = max(1, len(eq) // 600)
+    journal = read_jsonl(d / "journal.jsonl")
+    return {"report": rep, "status": read_json(d / "status.json"), "equity": eq[::step],
+            "events": journal[-200:][::-1]}
+
+
+@app.post("/api/paper/{name}/stop")
+def paper_stop(name: str):
+    d = project_path("artifacts", "paper", name)
+    if d.parent != project_path("artifacts", "paper") or not d.exists():
+        raise HTTPException(404, "unknown paper account")
+    (d / "STOP").write_text("stop requested from dashboard\n")
+    return {"stop_requested": name}
