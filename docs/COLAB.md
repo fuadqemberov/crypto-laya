@@ -1,7 +1,7 @@
 # Running on Google Colab
 
 Notebook: [`notebooks/colab_train.ipynb`](../notebooks/colab_train.ipynb). Open it in Colab with
-*File → Open notebook → GitHub*, repository `fuadqemberov/crypto-laya`, branch `laya-crypto-trainer`.
+*File → Open notebook → GitHub*, repository `fuadqemberov/crypto-laya`, branch `master`.
 Then *Runtime → Change runtime type → GPU* and *Runtime → Run all*.
 
 ## Where things live
