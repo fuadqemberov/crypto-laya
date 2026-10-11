@@ -1,0 +1,12 @@
+timeframe: 5m
+max_rows_per_symbol: null
+sample_every: 3             # every 3rd bar: labels overlap less, dataset stays tractable
+wait_downsample: 1.0        # applied to TRAIN only
+question_id: decision
+split:
+  train_frac: 0.60
+  val_frac: 0.15
+  calib_frac: 0.10
+  test_frac: 0.15           # latest period, untouched until the final report
+  embargo_bars: null        # null = label horizon
+  walk_forward_folds: 4

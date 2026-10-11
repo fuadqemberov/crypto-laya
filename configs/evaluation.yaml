@@ -1,0 +1,6 @@
+ece_bins: 15
+bootstrap_samples: 1000
+bootstrap_block: 288        # 1 day of 5m bars: block bootstrap respects serial dependence
+abstain_thresholds: [0.0, 0.4, 0.5, 0.6, 0.7, 0.8]
+min_confidence_trade: 0.0
+seed: 7

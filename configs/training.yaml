@@ -1,0 +1,43 @@
+output_dir: models
+allow_cpu: false            # full runs refuse CPU unless --allow-cpu is given
+profiles:
+  smoke:                    # engineering check only - makes no predictive claim
+    base: english
+    loss: rlcd
+    epochs: 2
+    micro_batch: 2
+    grad_accum: 2
+    max_len: 512            # states are ~380 tokens + ~100 for the question head
+    head_max_len: 128
+    max_train_rows: 64
+    max_eval_rows: 48
+    checkpoint_every_steps: 4
+    log_every_steps: 2
+    seeds: [0]
+  research:
+    base: english
+    loss: rlcd
+    epochs: 6
+    micro_batch: 8
+    grad_accum: 8
+    max_len: 512
+    head_max_len: 192
+    max_train_rows: 60000
+    max_eval_rows: 15000
+    checkpoint_every_steps: 200
+    early_stopping_patience: 2
+    seeds: [0, 1, 2]
+  deep:
+    base: english
+    loss: rlcd
+    epochs: 12
+    micro_batch: 8
+    grad_accum: 8
+    max_len: 512
+    head_max_len: 192
+    max_train_rows: null
+    max_eval_rows: null
+    checkpoint_every_steps: 500
+    early_stopping_patience: 3
+    hpo_trials: 6
+    seeds: [0, 1, 2]

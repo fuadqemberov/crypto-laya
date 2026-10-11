@@ -1,0 +1,7 @@
+checkpoint: models/best
+timeframe: 5m
+abstain_below: 0.45         # top calibrated probability below this -> WAIT (abstain)
+max_data_age_minutes: 15
+warmup_bars: 2400          # >= vol_percentile_window so live features match training
+host: 127.0.0.1             # localhost only
+port: 8765

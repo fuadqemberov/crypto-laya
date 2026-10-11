@@ -1,0 +1,35 @@
+# Binance USD-M perpetual futures, public archive only (https://data.binance.vision).
+root: data
+start: "2022-01-01"
+end: null                 # null = last complete UTC day
+base_timeframe: 5m
+timeframes: [5m, 15m, 1h, 4h, 1d]
+context_symbols: [BTCUSDT, ETHUSDT]
+metrics_publication_lag_ms: 300000   # open-interest snapshot treated as known one 5m bar later
+
+universe:
+  top_n: 100                # expand to 200 / 300 / 1000 (= all eligible)
+  quote_asset: USDT
+  rank_window_days: 30      # point-in-time ranking: trailing 30d quote volume BEFORE each month
+  min_history_days: 60      # a symbol must have traded this long before it can enter
+  min_avg_daily_quote_volume: 10000000
+  exclude_symbols: [USDCUSDT, BUSDUSDT, TUSDUSDT, FDUSDUSDT]
+  include_symbols: []
+  max_symbols: null
+
+download:
+  concurrency: 8
+  retries: 5
+  backoff_base_s: 1.0
+  timeout_s: 60
+  verify_checksums: true
+
+datasets:
+  klines: true
+  mark_price_klines: true
+  index_price_klines: true
+  premium_index_klines: true
+  funding_rate: true
+  metrics: true             # open interest + long/short ratios
+  agg_trades: false         # very large; enables CVD
+  book_depth: false         # depth % snapshots, only from 2023-01

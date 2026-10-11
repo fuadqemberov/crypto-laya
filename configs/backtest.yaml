@@ -1,0 +1,9 @@
+initial_equity_usdt: 2000   # simulated paper capital, research default only
+risk_per_trade: 0.005       # 0.5% of equity lost if the stop is hit
+max_leverage: 3.0
+max_positions: 5
+max_position_notional_frac: 0.5
+max_portfolio_drawdown: 0.25
+maintenance_margin_rate: 0.005
+min_confidence: 0.0
+one_position_per_symbol: true

@@ -1,0 +1,20 @@
+method: triple_barrier_atr  # or triple_barrier_pct
+tp_atr: 2.0
+sl_atr: 1.0
+tp_pct: 0.01
+sl_pct: 0.005
+max_hold_bars: 24           # 24 x 5m = 2h vertical barrier
+min_barrier_pct: 0.002
+ambiguity: conservative_sl  # TP and SL inside one candle -> count as SL (or resolve_1m / drop)
+timeout_policy: wait
+return_horizons_min: [15, 30, 60]
+soft_targets: false
+soft_barrier_scales: [0.75, 1.0, 1.25]
+costs:
+  taker_fee: 0.0005
+  maker_fee: 0.0002
+  entry_order: taker
+  exit_order: taker
+  half_spread_bps: 1.0
+  slippage_bps: 2.0
+  include_funding: true

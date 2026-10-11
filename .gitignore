@@ -1,8 +1,26 @@
+# environments
 .venv/
-.native/
-.env
-data/
 __pycache__/
 *.pyc
 .pytest_cache/
-*.ipynb
+.ruff_cache/
+.env
+
+# data, models and generated artifacts are never committed
+data/*
+!data/.gitkeep
+models/*
+!models/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
+logs/*
+!logs/.gitkeep
+reports/*
+!reports/.gitkeep
+!reports/README.md
+*.parquet
+*.safetensors
+*.pt
+*.pt.prev
+*.zip
+*.db

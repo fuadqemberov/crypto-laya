@@ -1,0 +1,28 @@
+rsi_period: 14
+ema_periods: [9, 21, 50, 200]
+sma_periods: [20, 50]
+macd: [12, 26, 9]
+atr_period: 14
+adx_period: 14
+roc_periods: [3, 12, 48]
+stoch_rsi: [14, 14, 3, 3]
+bb_period: 20
+bb_std: 2.0
+vol_windows: [12, 48, 288]
+vol_percentile_window: 2016
+rel_volume_window: 48
+volume_spike_z: 3.0
+vwap_window: 288
+slope_window: 12
+swing_lookback: 3           # swings are confirmed swing_lookback bars AFTER the pivot
+fvg_min_atr: 0.1
+order_block_lookback: 20
+sweep_lookback: 48
+sr_window: 288
+higher_timeframes: [1h, 4h]
+regime_trend_adx: 25.0
+regime_vol_high_pct: 0.8
+regime_vol_low_pct: 0.2
+regime_abnormal_return_z: 6.0
+include_context: true
+groups: [trend, volatility, volume, structure, derivatives, mtf, regime, context]

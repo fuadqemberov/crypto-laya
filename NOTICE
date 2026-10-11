@@ -1,0 +1,9 @@
+This project uses LAYA (https://github.com/NandhaKishorM/laya), Copyright Convai Innovations,
+licensed under the Apache License, Version 2.0. LAYA is installed from PyPI (laya==0.4.2,
+upstream commit 68804629e8ccd9d616d48a40e87de9fabbeae069 inspected) and its base checkpoints are
+downloaded from the Hugging Face Hub at the revisions pinned in laya.revisions.PINNED_REVISIONS.
+The local training loop in src/laya_crypto/training/laya_trainer.py follows laya.train.train_model
+and calls LAYA's own encoding, loss, calibration and checkpoint functions.
+
+Historical market data: Binance public data (https://github.com/binance/binance-public-data,
+https://data.binance.vision). Respect Binance's terms of use for the data you download.

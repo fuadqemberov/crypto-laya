@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LAYA Crypto Trainer</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--ink:#16181d;--muted:#5f6673;--line:#e1e4ea;--accent:#2f5bea;--good:#1a7f4b;--bad:#c23a3a;--wait:#8a6d1f;--chip:#eef1f6}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--panel:#171a21;--ink:#e7e9ee;--muted:#9aa2b1;--line:#2a2f3a;--accent:#7b9bff;--good:#4cc38a;--bad:#ff7b7b;--wait:#e0c063;--chip:#222733}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;gap:16px;align-items:center;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:2;flex-wrap:wrap}
+header h1{font-size:16px;margin:0;font-weight:650}header .sub{color:var(--muted);font-size:12px}
+nav{display:flex;gap:4px;flex-wrap:wrap}nav button{background:none;border:1px solid transparent;color:var(--muted);padding:6px 10px;border-radius:6px;cursor:pointer;font:inherit}
+nav button.on{color:var(--ink);background:var(--chip);border-color:var(--line)}
+main{padding:20px;max-width:1280px;margin:0 auto}section{display:none}section.on{display:block}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+.card h3{margin:0 0 8px;font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.big{font-size:22px;font-weight:650}.muted{color:var(--muted)}.good{color:var(--good)}.bad{color:var(--bad)}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--muted);font-weight:600}.scroll{overflow-x:auto}
+input,select,button.act{font:inherit;padding:6px 10px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+button.act{cursor:pointer;background:var(--accent);color:#fff;border-color:var(--accent)}button.act.sec{background:var(--panel);color:var(--ink);border-color:var(--line)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+pre{background:var(--chip);padding:10px;border-radius:8px;overflow:auto;max-height:340px;font-size:12px;white-space:pre-wrap}
+.bar{height:22px;border-radius:4px;display:flex;overflow:hidden;background:var(--chip)}.bar div{display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;background:var(--chip);font-size:12px}
+svg text{fill:var(--muted);font-size:11px}.empty{color:var(--muted);padding:12px 0}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>LAYA Crypto Trainer</h1><div class="sub">local research dashboard · no live trading</div></div>
+  <nav id="nav"></nav>
+</header>
+<main>
+<section id="hardware"></section>
+<section id="data"></section>
+<section id="training"></section>
+<section id="experiments"></section>
+<section id="backtest"></section>
+<section id="inference"></section>
+<section id="logs"></section>
+</main>
+<script>
+const TABS=["hardware","data","training","experiments","backtest","inference","logs"];
+const $=s=>document.querySelector(s);
+const api=async(p,o)=>{const r=await fetch(p,o);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.detail||r.statusText);return j};
+const post=(p,b)=>api(p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const num=(v,d=4)=>v==null||Number.isNaN(v)?"–":(typeof v==="number"?(Number.isInteger(v)?String(v):v.toFixed(d)):esc(v));
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+let state={dataset:localStorage.getItem("ds")||""};
+
+function nav(){$("#nav").innerHTML=TABS.map(t=>`<button data-t="${t}">${t[0].toUpperCase()+t.slice(1)}</button>`).join("");
+  $("#nav").onclick=e=>{if(e.target.dataset.t)show(e.target.dataset.t)};}
+function show(t){TABS.forEach(x=>{$("#"+x).classList.toggle("on",x===t);document.querySelector(`[data-t=${x}]`).classList.toggle("on",x===t)});
+  try{localStorage.setItem("tab",t)}catch(e){} loaders[t]().catch(e=>$("#"+t).innerHTML=`<div class="card bad">${esc(e.message)}</div>`)}
+function table(rows,cols,fmt={}){if(!rows||!rows.length)return '<div class="empty">No data yet.</div>';
+  return `<div class="scroll"><table><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join("")}</tr>${rows.map(r=>`<tr>${cols.map(c=>`<td>${fmt[c]?fmt[c](r[c],r):(typeof r[c]==="number"?num(r[c]):esc(r[c]))}</td>`).join("")}</tr>`).join("")}</table></div>`}
+function line(series,{h=180,yfmt=v=>v.toFixed(3)}={}){ // series: [{name,color,pts:[[x,y]]}]
+  const all=series.flatMap(s=>s.pts).filter(p=>Number.isFinite(p[1]));if(all.length<2)return '<div class="empty">Not enough points.</div>';
+  const W=640,P=40,xs=all.map(p=>p[0]),ys=all.map(p=>p[1]);let x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);if(y0===y1){y0-=1;y1+=1}if(x0===x1)x1=x0+1;
+  const X=x=>P+(x-x0)/(x1-x0)*(W-P-8),Y=y=>8+(1-(y-y0)/(y1-y0))*(h-28);
+  const paths=series.map(s=>`<polyline fill="none" stroke="${s.color}" stroke-width="1.6" points="${s.pts.filter(p=>Number.isFinite(p[1])).map(p=>X(p[0]).toFixed(1)+","+Y(p[1]).toFixed(1)).join(" ")}"/>`).join("");
+  const grid=[y0,(y0+y1)/2,y1].map(v=>`<line x1="${P}" x2="${W-8}" y1="${Y(v)}" y2="${Y(v)}" stroke="${css('--line')}"/><text x="2" y="${Y(v)+4}">${yfmt(v)}</text>`).join("");
+  const legend=series.map((s,i)=>`<text x="${P+i*150}" y="${h-4}" style="fill:${s.color}">■ ${esc(s.name)}</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${h}" width="100%" role="img">${grid}${paths}${legend}</svg>`}
+function probBar(p){const c={LONG:css('--good'),SHORT:css('--bad'),WAIT:css('--wait')};
+  return `<div class="bar">${Object.entries(p).map(([k,v])=>`<div style="width:${(v*100).toFixed(1)}%;background:${c[k]}">${v>0.08?k+" "+(v*100).toFixed(0)+"%":""}</div>`).join("")}</div>`}
+async function datasetPicker(id,onchange){const ds=await api("/api/datasets");if(!state.dataset&&ds.length)state.dataset=ds[ds.length-1].name;
+  return `<select id="${id}">${ds.map(d=>`<option ${d.name===state.dataset?"selected":""}>${esc(d.name)}</option>`).join("")}</select>`}
+function bindPicker(id,reload){const el=$("#"+id);if(el)el.onchange=()=>{state.dataset=el.value;try{localStorage.setItem("ds",el.value)}catch(e){};reload()}}
+
+const loaders={
+async hardware(){const {report:r,live}=await api("/api/hardware");const s=$("#hardware");
+  if(!r){s.innerHTML=`<div class="card">No hardware report yet. <button class="act" id="hwr">Inspect this machine</button></div>`;$("#hwr").onclick=()=>post("/api/hardware/refresh").then(()=>show("hardware"));return}
+  const gpu=(r.nvidia.available?r.nvidia.gpus.map(g=>`${esc(g.name)} · ${num(g.memory_total_mb/1024,1)} GB`).join("<br>"):`<span class="muted">${esc(r.nvidia.reason)}</span>`);
+  const lg=live.nvidia&&live.nvidia.available?live.nvidia.gpus.map(g=>`${num(g.memory_used_mb/1024,2)} / ${num(g.memory_total_mb/1024,1)} GB · ${g.utilization_pct}% util · ${g.temperature_c}°C`).join("<br>"):"–";
+  s.innerHTML=`<div class="grid">
+  <div class="card"><h3>CPU</h3><div class="big">${r.cpu.physical_cores}C / ${r.cpu.logical_threads}T</div><div class="muted">${esc(r.cpu.model)}</div><div>load ${live.cpu_percent}%</div></div>
+  <div class="card"><h3>RAM</h3><div class="big">${r.memory.total_gb} GB</div><div>in use ${live.ram_used_gb} GB</div></div>
+  <div class="card"><h3>GPU</h3><div>${gpu}</div><div class="muted">now: ${lg}</div></div>
+  <div class="card"><h3>CUDA / PyTorch</h3><div class="big ${r.torch.cuda_available?"good":"bad"}">${r.torch.cuda_available?"CUDA ready":"no CUDA"}</div><div class="muted">torch ${esc(r.torch.version)} · CUDA build ${esc(r.torch.built_cuda)}</div></div>
+  <div class="card"><h3>Training profile</h3><div class="big">${esc(r.profile.tier)}</div><div>micro ${r.profile.micro_batch} × accum ${r.profile.grad_accum} · amp ${r.profile.amp} · ckpt ${r.profile.gradient_checkpointing}</div><div class="muted">${(r.profile.notes||[]).map(esc).join("<br>")}</div></div>
+  <div class="card"><h3>Disk</h3><div class="big">${r.disk.free_gb} GB free</div><div class="muted">${esc(r.disk.path)} · write ${r.disk.seq_write_mb_s} MB/s</div></div></div>
+  <div class="row"><button class="act sec" id="hwr">Re-inspect</button><span class="muted">report from ${esc(r.generated_utc)}</span></div>`;
+  $("#hwr").onclick=()=>post("/api/hardware/refresh").then(()=>show("hardware"))},
+async data(){const d=await api("/api/data"),ds=await api("/api/datasets");const q=(d.quality&&d.quality.symbols)||[];
+  $("#data").innerHTML=`<div class="grid"><div class="card"><h3>Universe</h3>${d.universe?`<div class="big">${d.universe.unique_symbols_selected} symbols</div><div class="muted">${d.universe.months} months · ${d.universe.candidates} candidates incl. delisted</div>`:'<div class="empty">Run the universe command.</div>'}</div>
+  <div class="card"><h3>Last download</h3>${d.download?`<div class="big">${d.download.ok} files ok</div><div class="muted">${d.download.missing} missing · ${d.download.errors.length} errors · ${esc(d.download.start)} → ${esc(d.download.end)}</div>`:'<div class="empty">No downloads yet.</div>'}</div></div>
+  <div class="card" style="margin-top:14px"><h3>Coverage by data type</h3>${table(d.coverage_summary,["kind","timeframe","symbols","rows","first","last"])}</div>
+  <div class="card" style="margin-top:14px"><h3>Data quality (${esc(d.quality?d.quality.timeframe:"")})</h3>${table(q,["symbol","rows","missing_bars","gap_count","largest_gap_bars","ohlc_violations","return_outliers","quality_score","first_utc","last_utc"])}</div>
+  <div class="card" style="margin-top:14px"><h3>Datasets</h3>${table(ds,["name","created_utc","symbols","features","rows"],{rows:(v,r)=>`${v} <span class="muted">${esc(JSON.stringify(r.rows_by_split))}</span>`})}</div>`},
+async training(){const r=await api("/api/runs");const pick=await datasetPicker("tds");const j=await api("/api/job");
+  const job=j.job;const running=job&&job.alive;
+  $("#training").innerHTML=`<div class="card"><h3>Controls</h3><div class="row">dataset ${pick}
+   <select id="tprof"><option>smoke</option><option>research</option><option>deep</option></select>
+   <select id="tdev"><option>auto</option><option>cuda</option><option>cpu</option></select>
+   <label><input type="checkbox" id="tcpu"> allow CPU</label>
+   <button class="act" id="tstart" ${running?"disabled":""}>Start</button><button class="act sec" id="tres" ${running?"disabled":""}>Resume</button>
+   <button class="act sec" id="tstop" ${running?"":"disabled"}>Stop gracefully</button></div>
+   <div class="muted" id="tmsg">${running?`running: pid ${job.pid} · ${esc(job.cmd.slice(3).join(" "))}`:(job?`last job ${esc(job.state)}`:"no job started from the dashboard")}</div>
+   ${j.log_tail?`<pre>${esc(j.log_tail)}</pre>`:""}</div>
+   <div class="card" style="margin-top:14px"><h3>Runs</h3>${table(r.runs,["run_id","state","profile","device","epoch_completed","last_checkpoint_update","optimizer_updates","has_resume_state","has_final"],
+     {run_id:v=>`<a href="#" data-run="${esc(v)}">${esc(v)}</a>`,has_final:(v,row)=>v?`yes <button class="act sec" data-best="${esc(row.run_id)}">select as best</button>`:"no"})}
+     <div class="muted">best model: ${r.best?esc(r.best.run_id)+" ("+esc(r.best.selected_utc)+")":"none selected"}</div></div>
+   <div class="card" style="margin-top:14px" id="runview"><h3>Run detail</h3><div class="empty">Click a run.</div></div>`;
+  bindPicker("tds",()=>show("training"));
+  const go=resume=>post("/api/train",{profile:$("#tprof").value,dataset:$("#tds").value,device:$("#tdev").value,allow_cpu:$("#tcpu").checked,resume}).then(()=>setTimeout(()=>show("training"),800)).catch(e=>$("#tmsg").textContent=e.message);
+  $("#tstart").onclick=()=>go(false);$("#tres").onclick=()=>go(true);
+  $("#tstop").onclick=()=>post("/api/train/stop").then(x=>$("#tmsg").textContent="stop requested: "+x.stop_requested.join(", "));
+  $("#training").onclick=async e=>{const id=e.target.dataset.run,b=e.target.dataset.best;if(b){await post("/api/select-best",{run_id:b});show("training")}
+    if(!id)return;e.preventDefault();const m=await api(`/api/runs/${encodeURIComponent(id)}/metrics`);
+    const tr=m.metrics.filter(x=>x.kind==="train"),va=m.metrics.filter(x=>x.kind==="val");const last=tr[tr.length-1]||{};
+    $("#runview").innerHTML=`<h3>${esc(id)}</h3><div class="grid"><div><div class="muted">training loss by optimizer update</div>${line([{name:"loss",color:css('--accent'),pts:tr.map(x=>[x.update,x.loss])},{name:"epoch mean",color:css('--wait'),pts:tr.map(x=>[x.update,x.epoch_mean_loss])}])}</div>
+      <div><div class="muted">learning rate</div>${line([{name:"encoder lr",color:css('--good'),pts:tr.map(x=>[x.update,x.lr_encoder])},{name:"head lr",color:css('--bad'),pts:tr.map(x=>[x.update,x.lr_head])}],{yfmt:v=>v.toExponential(1)})}</div></div>
+      <div class="row"><span class="pill">update ${last.update??"–"}/${last.total_updates??"–"}</span><span class="pill">${num(last.items_per_s,2)} items/s (measured)</span><span class="pill">ETA ${last.eta_s_measured!=null?Math.round(last.eta_s_measured/60)+" min":"–"}</span><span class="pill">VRAM ${num(last.gpu_mem_allocated_gb,2)} / ${num(last.gpu_mem_reserved_gb,2)} GB</span></div>
+      ${table(va,["epoch","loss","accuracy","ece","brier","mean_confidence"])}${m.report?`<pre>${esc(JSON.stringify({best_epoch:m.report.best_epoch,temperature:m.report.temperature,val_calibrated:m.report.val_calibrated,collapse_warning:m.report.collapse_warning},null,2))}</pre>`:""}`}},
+async experiments(){const pick=await datasetPicker("eds");if(!state.dataset){$("#experiments").innerHTML='<div class="empty">No dataset.</div>';return}
+  const e=await api(`/api/experiments/${encodeURIComponent(state.dataset)}`);const cols=["model","n","accuracy","balanced_accuracy","macro_f1","log_loss","brier","ece","trades","expectancy","win_rate","profit_factor"];
+  const wf=e.extra.walk_forward_lightgbm,ab=e.extra.ablation_lightgbm;
+  const rel=Object.entries(e.reliability_val).slice(0,6);const colors=[css('--accent'),css('--good'),css('--bad'),css('--wait'),"#9b59b6","#16a085"];
+  $("#experiments").innerHTML=`<div class="row">dataset ${pick}</div>
+   <div class="card"><h3>Validation (model selection)</h3>${table(e.table.filter(r=>r.split==="val").sort((a,b)=>a.log_loss-b.log_loss),cols,{expectancy:v=>num(v,5)})}</div>
+   <div class="card" style="margin-top:14px"><h3>Test (untouched final period)</h3>${table(e.table.filter(r=>r.split==="test").sort((a,b)=>a.log_loss-b.log_loss),cols,{expectancy:v=>num(v,5)})}</div>
+   <div class="grid" style="margin-top:14px"><div class="card"><h3>Reliability (val)</h3>${line([{name:"ideal",color:css('--line'),pts:[[0,0],[1,1]]},...rel.map(([m,b],i)=>({name:m.slice(0,22),color:colors[i],pts:b.map(x=>[x.confidence,x.accuracy])}))],{yfmt:v=>v.toFixed(2)})}</div>
+   <div class="card"><h3>LAYA seeds</h3>${Object.entries(e.laya_summaries).map(([k,s])=>`<div><b>${esc(k)}</b> best by val: ${esc(s.best_run_by_val)}</div><pre>${esc(JSON.stringify(s.aggregate_over_seeds,null,1))}</pre>`).join("")||'<div class="empty">No LAYA runs scored.</div>'}</div></div>
+   <div class="grid" style="margin-top:14px"><div class="card"><h3>Walk-forward (LightGBM)</h3>${wf?table(wf.folds,["fold","train_rows","val_rows","log_loss","accuracy","expectancy","trades"]):'<div class="empty">Run walk-forward.</div>'}</div>
+   <div class="card"><h3>Feature ablation (val Δ log loss when removed)</h3>${ab?table(Object.entries(ab.delta_log_loss_when_removed).map(([g,d])=>({group:g,delta:d})),["group","delta"],{delta:v=>num(v,5)}):'<div class="empty">Run ablation.</div>'}</div></div>`;
+  bindPicker("eds",()=>show("experiments"))},
+async backtest(){const pick=await datasetPicker("bds");if(!state.dataset){$("#backtest").innerHTML='<div class="empty">No dataset.</div>';return}
+  const list=await api(`/api/backtests/${encodeURIComponent(state.dataset)}`);
+  $("#backtest").innerHTML=`<div class="row">dataset ${pick}</div><div class="card"><h3>Backtests</h3>${table(list,["model","split","trades","return_pct","max_drawdown_pct","profit_factor","win_rate","sharpe_daily_annualised","fees_usdt","funding_usdt","exposure"],
+   {model:(v,r)=>`<a href="#" data-bt="${esc(v)}_${esc(r.split)}">${esc(v)}</a>`,return_pct:v=>`<span class="${v>=0?"good":"bad"}">${num(v,2)}</span>`})}</div><div class="card" style="margin-top:14px" id="btview"><div class="empty">Click a backtest.</div></div>`;
+  bindPicker("bds",()=>show("backtest"));
+  $("#backtest").onclick=async ev=>{const n=ev.target.dataset.bt;if(!n)return;ev.preventDefault();const d=await api(`/api/backtests/${encodeURIComponent(state.dataset)}/${encodeURIComponent(n)}`);const s=d.summary;
+    $("#btview").innerHTML=`<h3>${esc(n)}</h3><div class="grid"><div><div class="muted">equity (USDT)</div>${line([{name:"equity",color:css('--accent'),pts:d.equity.map(x=>[x.time,x.equity])}],{yfmt:v=>v.toFixed(0)})}</div>
+     <div><div class="muted">drawdown</div>${line([{name:"drawdown",color:css('--bad'),pts:d.equity.map(x=>[x.time,-x.drawdown*100])}],{yfmt:v=>v.toFixed(1)+"%"})}</div></div>
+     <div class="row"><span class="pill">vetoes ${esc(JSON.stringify(s.vetoes))}</span><span class="pill">exits ${esc(JSON.stringify(s.exit_reasons||{}))}</span><span class="pill">filters: ${esc(s.exchange_filters)}</span></div>
+     <div class="grid"><div>${table(s.by_symbol||[],["symbol","count","sum"])}</div><div>${table(s.by_regime||[],["regime","count","sum"])}</div></div>
+     <h3 style="margin-top:12px">Trades (last 300)</h3>${table(d.trades,["symbol","side","entry_px","exit_px","net_pnl","fees","funding","reason","hold_bars","regime"])}`}},
+async inference(){const syms=await api("/api/symbols");
+  $("#inference").innerHTML=`<div class="card"><h3>Run the model</h3><div class="row"><select id="isym">${syms.map(s=>`<option>${esc(s)}</option>`).join("")}</select>
+   <select id="itf"><option>5m</option><option>15m</option></select><label><input type="checkbox" id="ioff"> cached data only</label><button class="act" id="igo">Predict</button></div><div id="iout"></div></div>`;
+  $("#igo").onclick=async()=>{$("#iout").innerHTML='<div class="muted">running…</div>';try{const r=await post("/api/predict",{symbol:$("#isym").value,timeframe:$("#itf").value,offline:$("#ioff").checked});
+    if(r.error){$("#iout").innerHTML=`<div class="bad">${esc(r.error)}</div>`;return}
+    $("#iout").innerHTML=`<div class="row"><span class="big ${r.decision==="LONG"?"good":r.decision==="SHORT"?"bad":""}">${esc(r.decision)}</span>${r.abstained?'<span class="pill">abstained (low confidence)</span>':""}${r.stale?'<span class="pill bad">STALE data</span>':""}</div>${probBar(r.probabilities)}
+     <div class="row"><span class="pill">data ${esc(r.data_timestamp_utc)} (${r.data_age_minutes} min old, ${esc(r.data_source)})</span><span class="pill">model ${esc(r.model_version.profile)} · seed ${esc(r.model_version.seed)}</span><span class="pill">latency ${r.latency_ms.total} ms (model ${r.latency_ms.model} ms)</span></div>
+     ${r.notes.length?`<pre>${esc(r.notes.join("\n"))}</pre>`:""}<div class="muted">${esc(r.disclaimer)}</div>`}catch(e){$("#iout").innerHTML=`<div class="bad">${esc(e.message)}</div>`}}},
+async logs(){const l=await api("/api/logs");$("#logs").innerHTML=`<div class="card"><h3>Logs</h3><div class="row"><select id="lsel">${l.map(x=>`<option>${esc(x)}</option>`).join("")}</select><button class="act sec" id="lgo">Open</button></div><pre id="lout"></pre></div>`;
+  $("#lgo").onclick=async()=>{const r=await api(`/api/logs/${encodeURIComponent($("#lsel").value)}?lines=300`);$("#lout").textContent=r.tail};if(l.length)$("#lgo").click()}
+};
+nav();let t0="hardware";try{t0=localStorage.getItem("tab")||t0}catch(e){}show(TABS.includes(t0)?t0:"hardware");
+setInterval(()=>{if($("#training").classList.contains("on")&&document.visibilityState==="visible"){api("/api/job").then(j=>{if(j.job&&j.job.alive)show("training")}).catch(()=>{})}},15000);
+</script>
+</body>
+</html>
