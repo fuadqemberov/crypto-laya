@@ -181,3 +181,32 @@ def test_dashboard_paper_endpoints(bot_env, monkeypatch):
     assert d["status"]["pending"] and d["events"][0]["event"] == "decision"
     assert c.get("/api/paper/../../x").status_code == 404
     assert c.post("/api/paper/t/stop").status_code == 200 and bot.stop_file.exists()
+
+
+def test_choose_model_uses_validation_and_writes_config(tmp_path, monkeypatch):
+    import laya_crypto.config as config
+    from laya_crypto.evaluation import scoring
+    from laya_crypto.utils.io import write_json
+
+    monkeypatch.setattr(scoring, "project_path", lambda *p: tmp_path.joinpath(*p))
+    monkeypatch.setattr(paper, "project_path", lambda *p: tmp_path.joinpath(*p))
+    monkeypatch.setattr(paper, "_dataset_dir", lambda name: tmp_path / "data" / "datasets" / name)
+    monkeypatch.setattr(config, "CONFIG_DIR", tmp_path / "configs")
+    (tmp_path / "configs").mkdir()
+    (tmp_path / "configs" / "bot.yaml").write_text("model: laya   # comment kept\nmodel_dataset: null\nsymbols: [X]\n")
+    write_json(tmp_path / "data" / "datasets" / "d" / "manifest.json", {"symbols": ["AUSDT", "BUSDT"]})
+
+    def rep(model, val_ll, test_ll):
+        cls = {"accuracy": 0.4, "balanced_accuracy": 0.4, "macro_f1": 0.4, "brier": 0.6, "ece": 0.01, "n": 10}
+        sig = {"trades": 1, "expectancy": 0.001, "win_rate": 0.5, "profit_factor": 1.0, "net_return_sum": 0.0,
+               "per_decision_mean_ci": {"ci_low": 0, "ci_high": 0}}
+        return {"model": model, "splits": {"val": {"classification": {**cls, "log_loss": val_ll}, "signals": sig},
+                                           "test": {"classification": {**cls, "log_loss": test_ll}, "signals": sig}}}
+    write_json(tmp_path / "reports" / "d" / "lightgbm.json", rep("lightgbm", 1.09, 1.20))
+    write_json(tmp_path / "reports" / "d" / "xgboost.json", rep("xgboost", 1.10, 1.00))  # better on TEST only
+    write_json(tmp_path / "reports" / "d" / "always_wait.json", rep("always_wait", 0.5, 0.5))  # not a candidate
+    out = paper.choose_model("d")
+    assert out["model"] == "lightgbm"  # chosen on validation, test is ignored for the choice
+    text = (tmp_path / "configs" / "bot.yaml").read_text()
+    assert "model: lightgbm" in text and "model_dataset: d" in text and "symbols: [AUSDT, BUSDT]" in text
+    assert "# comment kept" in text

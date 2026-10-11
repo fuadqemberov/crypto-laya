@@ -227,9 +227,13 @@ def cmd_dashboard(a):
 
 
 def cmd_paper(a):
-    from ..trading.paper import PaperBot, report
+    from ..trading.paper import PaperBot, choose_model, report
 
-    if a.action == "run":
+    if a.action == "setup":
+        if not a.dataset:
+            raise SystemExit("paper setup needs --dataset")
+        _print(choose_model(a.dataset))
+    elif a.action == "run":
         PaperBot(a.name).run(max_steps=1 if a.once else None)
     elif a.action == "stop":
         from ..config import project_path
@@ -362,8 +366,9 @@ def build_parser() -> argparse.ArgumentParser:
         s.set_defaults(f=fn)
 
     s = sub.add_parser("paper", help="paper-trading bot: live public data, simulated account, no orders")
-    s.add_argument("action", choices=["run", "stop", "status", "report"])
+    s.add_argument("action", choices=["setup", "run", "stop", "status", "report"])
     s.add_argument("--name", default="default", help="account name (separate state per name)")
+    s.add_argument("--dataset", help="setup: choose the bot's model on this dataset's validation split")
     s.add_argument("--once", action="store_true", help="process the next candle close, then exit")
     s.set_defaults(f=cmd_paper)
 

@@ -91,11 +91,27 @@ class BaselineScorer:
             raise FileNotFoundError(f"{path} not found: run `baselines --dataset {dataset}` first")
         self.model = load_baseline(path)
         self.version = {"model": name, "dataset": dataset, "artifact": str(path)}
+        self.gmm = None
+        from ..config import load_data_config
+
+        gmm_path = load_data_config().root_path / "datasets" / dataset / "regime_gmm.pkl"
+        if gmm_path.exists():
+            import pickle
+
+            with open(gmm_path, "rb") as fh:
+                self.gmm = pickle.load(fh)
+        elif "regime_gmm" in (getattr(self.model, "features", None) or []):
+            log.warning("%s has no regime_gmm.pkl (built by an older version): regime_gmm is left missing "
+                        "at inference; rebuild the dataset to fix", dataset)
 
     def score(self, row: pd.Series, state: str) -> np.ndarray:
-        feats = getattr(self.model, "features", None)
-        frame = pd.DataFrame([row[feats]]) if feats else pd.DataFrame([row])
-        p = self.model.predict_proba(frame.astype(float) if feats else frame)
+        feats = getattr(self.model, "features", None) or list(row.index)
+        row = row.copy()
+        if "regime_gmm" in feats:
+            row["regime_gmm"] = (float(self.gmm.predict(pd.DataFrame([row])).iloc[0]) if self.gmm is not None
+                                 else np.nan)
+        frame = pd.DataFrame([row.reindex(feats)])  # a feature missing live stays NaN, never invented
+        p = self.model.predict_proba(frame.astype(float))
         cal = getattr(self.model, "calibrator", None)
         return (cal.transform(p) if cal is not None else p)[0]
 
@@ -427,3 +443,60 @@ def report(name: str = "default") -> dict:
                 note="paper trading on live data: simulated fills, no orders were sent")
     write_json(d / "report.json", perf)
     return perf
+
+
+LEARNED_BASELINES = ("lightgbm", "xgboost", "logistic_regression")
+
+
+def _dataset_dir(dataset: str) -> Path:
+    from ..config import load_data_config
+
+    return load_data_config().root_path / "datasets" / dataset
+
+
+def choose_model(dataset: str, write_config: bool = True) -> dict:
+    """Pick the decider for the bot on VALIDATION log loss (never test) and write it to bot.yaml.
+
+    Candidates: the learned baselines of `dataset`, plus LAYA (`models/best`) if it was scored on
+    the same dataset. The test split is reported for information only.
+    """
+    import re
+
+    from ..config import CONFIG_DIR
+    from ..evaluation.scoring import comparison_table
+
+    tab = comparison_table(dataset)
+    if tab.empty:
+        raise FileNotFoundError(f"no scored models for dataset {dataset!r}: run `baselines --dataset {dataset}`")
+    val = tab[tab["split"] == "val"]
+    best_laya = read_json(project_path("models", "best", "selection.json"))
+    allowed = set(LEARNED_BASELINES) | ({f"laya-{best_laya['run_id']}"} if best_laya else set())
+    val = val[val["model"].isin(allowed)].sort_values("log_loss")
+    if val.empty:
+        raise FileNotFoundError("no learned model with validation scores")
+    pick = val.iloc[0]
+    model = "laya" if str(pick["model"]).startswith("laya-") else str(pick["model"])
+    test = tab[(tab["split"] == "test") & (tab["model"] == pick["model"])]
+    out = {"model": model, "model_dataset": dataset, "chosen_by": "lowest validation log loss",
+           "val": {k: float(pick[k]) if pick[k] is not None else None
+                   for k in ("log_loss", "accuracy", "expectancy")},
+           "test_for_information": test[["log_loss", "accuracy", "expectancy"]].iloc[0].to_dict() if len(test) else None,
+           "candidates": val[["model", "log_loss", "accuracy", "expectancy"]].to_dict("records")}
+    if write_config:
+        path = CONFIG_DIR / "bot.yaml"
+        text = path.read_text(encoding="utf-8") if path.exists() else ""
+        manifest = read_json(_dataset_dir(dataset) / "manifest.json") or {}
+        symbols = manifest.get("symbols") or []
+        pairs = [("model", model), ("model_dataset", dataset)]
+        if symbols:  # trade the symbols the model was trained on
+            pairs.append(("symbols", "[" + ", ".join(symbols) + "]"))
+            out["symbols"] = symbols
+        for key, value in pairs:
+            line = f"{key}: {value}"
+            if re.search(rf"^{key}:.*$", text, flags=re.M):
+                text = re.sub(rf"^{key}:[^\n#]*", line + " ", text, count=1, flags=re.M)
+            else:
+                text += f"\n{line}\n"
+        path.write_text(text, encoding="utf-8")
+        out["written_to"] = str(path)
+    return out

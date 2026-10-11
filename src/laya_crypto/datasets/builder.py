@@ -82,7 +82,11 @@ def symbol_rows(cfg: DataConfig, fcfg: FeaturesConfig, lcfg: LabelingConfig, dcf
     rows = pd.concat([frame, labels.drop(columns=[c for c in labels.columns if c in frame.columns])], axis=1)
     keep = rows["bar_present"].astype(bool) & rows["label"].notna() & rows["atr_pct"].notna()
     if universe is not None and len(universe):
-        keep &= membership_mask(universe, symbol, rows["open_time"]).to_numpy()
+        member = membership_mask(universe, symbol, rows["open_time"]).to_numpy()
+        if not member.any():
+            log.warning("%s is never in the point-in-time universe (data/universe/universe.parquet), so it "
+                        "contributes 0 rows. Rebuild the universe, or remove that file to build without one.", symbol)
+        keep &= member
     if dcfg.sample_every > 1:
         keep &= ((rows["open_time"] // tf_ms(tf)) % dcfg.sample_every == 0).to_numpy()
     rows = rows[keep]
@@ -140,6 +144,11 @@ def build_dataset(name: str, symbols: list[str] | None = None, force: bool = Fal
         df["regime_gmm"] = gmm.predict(df).astype(float)
         feature_cols = [*feature_cols, "regime_gmm"]
         groups.setdefault("regime", []).append("regime_gmm")
+        import pickle
+
+        out.mkdir(parents=True, exist_ok=True)
+        with open(out / "regime_gmm.pkl", "wb") as fh:  # live inference applies the same TRAIN-fitted detector
+            pickle.dump(gmm, fh)
     except (KeyError, ValueError) as e:
         log.warning("GMM regime skipped: %r", e)
     df["state"] = [serialize_row(r, r["symbol"], dcfg.timeframe) for r in df.to_dict("records")]

@@ -21,6 +21,7 @@ cd D:\Workspace\laya-crypto-trainer
 powershell -ExecutionPolicy Bypass -File scripts\setup.ps1          # uv, Python 3.12, CUDA torch, hardware report, base LAYA
 powershell -ExecutionPolicy Bypass -File scripts\smoke_test.ps1     # tests + small real end-to-end run
 powershell -ExecutionPolicy Bypass -File scripts\launch_dashboard.ps1   # http://127.0.0.1:8765
+powershell -ExecutionPolicy Bypass -File scripts\start_bot.ps1          # data -> models -> best model -> paper bot
 ```
 
 Full details: [docs/INSTALL_WINDOWS.md](docs/INSTALL_WINDOWS.md).

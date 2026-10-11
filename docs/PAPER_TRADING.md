@@ -9,6 +9,19 @@ Why it exists: a backtest is scored on history the researcher has already seen. 
 scores the model on candles that did not exist when it was trained or selected. It is the honest
 test of whether there is an edge before any real money is involved.
 
+## One command
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start_bot.ps1
+```
+
+It downloads the data (only new files on re-runs), builds the dataset once, trains the baselines
+once, picks the model with the lowest **validation** log loss (`paper setup`), writes it and the
+dataset's symbols into `configs\bot.yaml`, opens the dashboard and starts the paper bot. Options:
+`-Symbols BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT -Start 2023-01-01 -Dataset laptop4` (a new dataset name
+for a new symbol set). After training LAYA (e.g. on Colab) and `select-best`, `paper setup` also
+considers LAYA if it was scored on the same dataset.
+
 ## Start
 
 ```powershell
