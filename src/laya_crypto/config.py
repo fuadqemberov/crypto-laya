@@ -14,6 +14,16 @@ from pydantic import BaseModel, Field, model_validator
 
 PROJECT_ROOT = Path(os.environ.get("LAYA_CRYPTO_ROOT", Path(__file__).resolve().parents[2]))
 CONFIG_DIR = Path(os.environ.get("LAYA_CRYPTO_CONFIG_DIR", PROJECT_ROOT / "configs"))
+# Where everything that must survive lives (data, models, reports, artifacts, logs). Defaults to the
+# project folder; on Colab it points at Google Drive so a disconnected session loses nothing.
+STORAGE_ROOT = Path(os.environ.get("LAYA_CRYPTO_STORAGE", PROJECT_ROOT))
+# Download cache of raw archive zips. Disposable: processed tables record which zips they contain,
+# so a missing cache is never re-downloaded. On Colab it sits on the fast local disk.
+RAW_DIR = os.environ.get("LAYA_CRYPTO_RAW_DIR")
+# "Lean" checkpoints: no copy of the previous resume state and no per-epoch checkpoint_latest/
+# folder (the resume state already holds the weights). Saves ~6 GB per run on small Drives.
+LEAN_CHECKPOINTS = os.environ.get("LAYA_CRYPTO_LEAN", "").strip().lower() in ("1", "true", "yes")
+STORAGE_DIRS = ("data", "models", "reports", "artifacts", "logs")
 
 
 class Strict(BaseModel):
@@ -70,7 +80,11 @@ class DataConfig(Strict):
     @property
     def root_path(self) -> Path:
         p = Path(self.root)
-        return p if p.is_absolute() else PROJECT_ROOT / p
+        return p if p.is_absolute() else STORAGE_ROOT / p
+
+    @property
+    def raw_path(self) -> Path:
+        return Path(RAW_DIR) if RAW_DIR else self.root_path / "raw"
 
 
 # --------------------------------------------------------------------------------- features
@@ -287,4 +301,7 @@ def load_hardware_config() -> HardwareConfig:
 
 
 def project_path(*parts: str) -> Path:
+    """Paths under data/, models/, reports/, artifacts/ and logs/ resolve to STORAGE_ROOT."""
+    if parts and str(parts[0]).replace("\\", "/").split("/")[0] in STORAGE_DIRS:
+        return STORAGE_ROOT.joinpath(*parts)
     return PROJECT_ROOT.joinpath(*parts)

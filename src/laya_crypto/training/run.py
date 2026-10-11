@@ -14,7 +14,7 @@ from ..evaluation.scoring import save_predictions, score_model
 from ..utils.io import read_json, write_json
 from ..utils.logging import get_logger
 from .base_checkpoint import resolve_base
-from .laya_trainer import LayaRun, profile_with_hardware, resolve_device, run_id_for
+from .laya_trainer import LayaRun, ResumeError, profile_with_hardware, resolve_device, run_id_for
 
 log = get_logger("train")
 
@@ -53,9 +53,24 @@ def evaluate_checkpoint(final_dir: str, dataset: str, model_name: str, device: s
     return score_model(dataset, model_name, rows, proba, info)
 
 
+def _eval_summary(ev: dict) -> dict:
+    return {s: {"accuracy": v["classification"]["accuracy"], "log_loss": v["classification"]["log_loss"],
+                "ece": v["classification"]["ece"], "expectancy": v["signals"]["expectancy"]}
+            for s, v in ev["splits"].items()}
+
+
 def train_profile(profile_name: str, dataset: str, resume: bool = False, device: str = "auto",
                   allow_cpu: bool | None = None, seeds: list[int] | None = None, overwrite: bool = False,
-                  overrides: dict | None = None, evaluate: bool = True, tag: str = "") -> dict:
+                  overrides: dict | None = None, evaluate: bool = True, tag: str = "",
+                  auto_resume: bool = False) -> dict:
+    """Train (or continue) every seed of a profile.
+
+    `auto_resume`: the same command can simply be run again after an interruption (e.g. a Colab
+    disconnect). A seed whose run already completed with the same fingerprint is not retrained and
+    its stored evaluation is reused; a seed with a saved state is resumed; others start fresh.
+    """
+    from ..datasets.builder import load_dataset as _load
+
     tcfg = load_training_config()
     if profile_name not in tcfg.profiles:
         raise KeyError(f"unknown profile {profile_name!r}; configs/training.yaml defines {sorted(tcfg.profiles)}")
@@ -65,18 +80,33 @@ def train_profile(profile_name: str, dataset: str, resume: bool = False, device:
     profile = profile_with_hardware(profile, _hardware_profile())
     dev = resolve_device(device, profile_name, tcfg.allow_cpu if allow_cpu is None else allow_cpu)
     base_dir = resolve_base(profile.base, project_path("models", "base"))
+    _, dmanifest = _load(dataset)
+    base_manifest = read_json(Path(base_dir) / "laya_base_manifest.json")
     results = []
     for seed in seeds or profile.seeds:
         rid = run_id_for(profile_name, dataset, seed, tag)
         run = LayaRun(rid, dataset, profile_name, profile, base_dir, dev, seed, overrides)
-        rep = run.train(resume=resume, overwrite=overwrite)
-        if rep["state"] != "completed":
-            return {"state": rep["state"], "run_id": rid}
+        fp = run.fingerprint(dmanifest, base_manifest)["hash"]
+        prev = read_json(run.dir / "train_report.json")
+        if auto_resume and not overwrite and prev and prev.get("state") == "completed":
+            if prev.get("fingerprint") != fp:
+                raise ResumeError(f"{rid} already completed with a different configuration; "
+                                  "use --overwrite to retrain it")
+            log.info("%s already completed; reusing it", rid)
+            rep = prev
+        else:
+            rep = run.train(resume=resume or (auto_resume and (run.dir / "state.json").exists()),
+                            overwrite=overwrite)
+            if rep["state"] != "completed":
+                return {"state": rep["state"], "run_id": rid}
         if evaluate:
-            ev = evaluate_checkpoint(rep["final_dir"], dataset, f"laya-{rid}", str(dev), profile.max_eval_rows)
-            rep["evaluation"] = {s: {"accuracy": v["classification"]["accuracy"],
-                                     "log_loss": v["classification"]["log_loss"], "ece": v["classification"]["ece"],
-                                     "expectancy": v["signals"]["expectancy"]} for s, v in ev["splits"].items()}
+            name = f"laya-{rid}"
+            stored = read_json(project_path("reports", dataset, f"{name}.json"))
+            if auto_resume and stored and (stored.get("info") or {}).get("fingerprint") == fp:
+                ev = stored
+            else:
+                ev = evaluate_checkpoint(rep["final_dir"], dataset, name, str(dev), profile.max_eval_rows)
+            rep["evaluation"] = _eval_summary(ev)
         results.append(rep)
     summary = summarize(profile_name, dataset, results)
     return summary

@@ -48,7 +48,8 @@ async def _download(cfg: DataConfig, jobs: list[tuple[str, str, str | None]], st
                 continue
             if not p:
                 log.info("no archive files for %s %s %s in range", k, s, tf or "")
-            files += p
+            done = store.incorporated_sources(cfg, k, s, tf)
+            files += [f for f in p if f.key.rsplit("/", 1)[-1] not in done]  # already in the table
         log.info("planned %d files for %d (kind, symbol, timeframe) jobs", len(files), len(jobs))
         return await client.fetch_many(files, progress=_progress)
 

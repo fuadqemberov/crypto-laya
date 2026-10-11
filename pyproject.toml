@@ -3,7 +3,7 @@ name = "laya-crypto-trainer"
 version = "0.1.0"
 description = "Local LAYA fine-tuning, evaluation and inference for Binance USD-M futures research (no live trading)"
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     # Official LAYA decision model, pinned for reproducibility (upstream commit recorded in docs/ARCHITECTURE.md).
     "laya==0.4.2",

@@ -130,3 +130,24 @@ def test_hardware_profile_keeps_effective_batch():
     p = profile(micro_batch=8, grad_accum=8)
     out = profile_with_hardware(p, {"device": "cuda", "micro_batch": 2, "amp": True, "gradient_checkpointing": True})
     assert out.micro_batch * out.grad_accum == 64 and out.micro_batch == 2 and out.amp is True
+
+
+def test_state_out_of_step_with_meta_is_accepted_if_complete(project, tiny_ckpt, monkeypatch):
+    """Synced folders can deliver a new state.json with an older (complete) state.pt."""
+    dev = torch.device("cpu")
+    orig_metric = LayaRun.metric
+
+    def stop_at_2(self, **kw):
+        orig_metric(self, **kw)
+        if kw.get("kind") == "train" and kw.get("update") == 2:
+            self.stop_file.write_text("stop")
+    monkeypatch.setattr(LayaRun, "metric", stop_at_2)
+    LayaRun("y", "ds", "smoke", profile(), str(tiny_ckpt), dev, 0).train()
+    monkeypatch.setattr(LayaRun, "metric", orig_metric)
+    d = project / "models" / "checkpoints" / "y"
+    meta = json.loads((d / "state.json").read_text())
+    meta["sha256"] = "0" * 64  # meta from a "newer" save than the file that arrived
+    (d / "state.json").write_text(json.dumps(meta))
+    st = LayaRun("y", "ds", "smoke", profile(), str(tiny_ckpt), dev, 0)
+    st._fp = json.loads((d / "fingerprint.json").read_text())
+    assert st.load_state()["progress"]["global_update"] == 2

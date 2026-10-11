@@ -48,6 +48,19 @@ and resumed produces the same weights (max abs difference < 1e-3 in the fp16 exp
 epoch losses as an uninterrupted run; that a changed config is refused; that a truncated `state.pt`
 falls back to `state.pt.prev`; and that resume without saved state is an error.
 
+### Lean mode and synced folders
+
+`LAYA_CRYPTO_LEAN=1` keeps a single resume state (no `.prev`) and skips the per-epoch
+`checkpoint_latest/` folder, which the resume state makes redundant: about 6 GB less per run. The
+write stays atomic, but the fallback to a previous state is gone.
+
+On a synced folder (Google Drive), `state.json` may describe a newer save than the `state.pt` that
+arrived. A state that loads completely and carries this run's fingerprint inside it is then
+accepted with a warning. A truncated file is rejected.
+
+`train --auto-resume` makes the command re-runnable: completed seeds (same fingerprint) are skipped,
+saved states are resumed, and the remaining seeds start. See [COLAB.md](COLAB.md).
+
 ## Usage
 
 ```powershell

@@ -12,21 +12,24 @@ def _print(obj) -> None:
 
 
 def cmd_hardware(a):
+    from ..config import STORAGE_ROOT, project_path
     from ..hardware.detect import inspect, to_markdown, write_reports
 
-    rep = inspect(".")
-    j, m = write_reports(rep, "reports")
+    STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
+    rep = inspect(STORAGE_ROOT)  # disk check where data and checkpoints will be written
+    j, m = write_reports(rep, project_path("reports"))
     print(to_markdown(rep))
     print(f"\nwritten: {j} and {m}")
 
 
 def cmd_laya_demo(a):
     """Runs the official base checkpoint once, before any crypto training."""
+    from ..config import project_path
     from ..datasets.serialize import QUESTION, QUESTION_ID
     from ..inference.laya_model import LayaDecisionModel
     from ..training.base_checkpoint import resolve_base
 
-    path = resolve_base(a.base, "models/base")
+    path = resolve_base(a.base, project_path("models", "base"))
     m = LayaDecisionModel(path, device=a.device)
     state = "SYMBOL=BTCUSDT\nTIMEFRAME=5m\nTREND_1H=BULLISH\nRSI=61.2\nATR_PCT=0.72\nREL_VOLUME=1.8"
     res = m.agent.predict(state, {QUESTION_ID: QUESTION})
@@ -79,13 +82,15 @@ def cmd_validate(a):
     for p in sorted(root.glob("*.parquet")):
         df = store.load(cfg, "klines", p.stem, a.timeframe)
         reps.append(kline_quality(df, a.timeframe, p.stem))
-    write_json("reports/data_quality.json", {"timeframe": a.timeframe, "symbols": reps,
+    from ..config import project_path
+
+    write_json(project_path("reports", "data_quality.json"), {"timeframe": a.timeframe, "symbols": reps,
                                              "coverage": store.coverage(cfg).astype(str).to_dict("records")})
     for r in reps:
         print(f"{r['symbol']:<14} rows {r['rows']:>8}  missing {r.get('missing_bars', 0):>6}  "
               f"ohlc_bad {r.get('ohlc_violations', 0):>3}  outliers {r.get('return_outliers', 0):>3}  "
               f"score {r['quality_score']:.3f}  {r.get('first_utc', '')[:10]} .. {r.get('last_utc', '')[:10]}")
-    print("written: reports/data_quality.json")
+    print(f"written: {project_path('reports', 'data_quality.json')}")
 
 
 def cmd_dataset(a):
@@ -124,7 +129,7 @@ def cmd_train(a):
         overrides["freeze_encoder"] = True
     _print(train_profile(a.profile, a.dataset, resume=a.resume, device=a.device, allow_cpu=a.allow_cpu or None,
                          seeds=a.seeds, overwrite=a.overwrite, overrides=overrides or None,
-                         evaluate=not a.no_eval))
+                         evaluate=not a.no_eval, auto_resume=a.auto_resume))
 
 
 def cmd_stop(a):
@@ -186,7 +191,9 @@ def cmd_select_best(a):
 
     run = a.run
     if not run:
-        s = read_json(f"reports/{a.dataset}/laya_{a.profile}_summary.json")
+        from ..config import project_path
+
+        s = read_json(project_path("reports", a.dataset, f"laya_{a.profile}_summary.json"))
         if not s:
             sys.exit("no summary for that dataset/profile; pass --run")
         run = s["best_run_by_val"]
@@ -268,6 +275,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--profile", required=True, choices=["smoke", "research", "deep"])
     s.add_argument("--dataset", required=True)
     s.add_argument("--resume", action="store_true")
+    s.add_argument("--auto-resume", action="store_true",
+                   help="re-runnable: skip completed seeds, resume interrupted ones, start the rest")
     s.add_argument("--overwrite", action="store_true", help="discard an existing run state and start again")
     s.add_argument("--device", default="auto", help="auto | cuda | cpu")
     s.add_argument("--allow-cpu", action="store_true")
@@ -339,8 +348,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> None:
+    from ..config import project_path
     from ..utils.logging import setup_logging
 
-    setup_logging("logs")
+    setup_logging(project_path("logs"))
     a = build_parser().parse_args(argv)
     a.f(a)

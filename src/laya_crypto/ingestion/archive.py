@@ -64,7 +64,7 @@ def _parse_period(p: str) -> date:
 class ArchiveClient:
     def __init__(self, cfg: DataConfig, client: httpx.AsyncClient | None = None):
         self.cfg = cfg
-        self.raw_root = cfg.root_path / "raw"
+        self.raw_root = cfg.raw_path
         self._client = client
         self._sem = asyncio.Semaphore(cfg.download.concurrency)
 

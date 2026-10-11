@@ -25,6 +25,10 @@ powershell -ExecutionPolicy Bypass -File scripts\launch_dashboard.ps1   # http:/
 
 Full details: [docs/INSTALL_WINDOWS.md](docs/INSTALL_WINDOWS.md).
 
+**Google Colab (GPU):** open [`notebooks/colab_train.ipynb`](notebooks/colab_train.ipynb) and run all
+cells. Data, checkpoints, resume states and reports are kept on Google Drive, and every cell can be
+re-run after a disconnect without repeating finished work. See [docs/COLAB.md](docs/COLAB.md).
+
 ## The full workflow
 
 ```powershell
@@ -84,6 +88,7 @@ uv run python -m laya_crypto.cli dashboard
 | local dashboard (FastAPI + static UI, real job control) | `dashboard/` | below |
 | how it fits together, LAYA APIs used, what was extended and why | — | [ARCHITECTURE](docs/ARCHITECTURE.md) |
 | problems and fixes | — | [TROUBLESHOOTING](docs/TROUBLESHOOTING.md) |
+| Colab with results on Google Drive | `notebooks/colab_train.ipynb` | [COLAB](docs/COLAB.md) |
 
 Dashboard tabs: Hardware (live CPU/RAM/GPU), Data (coverage, quality, datasets), Training (start /
 resume / graceful stop of a real subprocess, one job at a time; loss, LR, throughput, ETA, VRAM per

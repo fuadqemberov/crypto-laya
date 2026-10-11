@@ -30,7 +30,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from ..config import TrainProfile, project_path
+from ..config import LEAN_CHECKPOINTS, TrainProfile, project_path
 from ..utils.io import read_json, read_jsonl, sha256_file, sha256_json, write_json
 from ..utils.logging import get_logger
 
@@ -174,32 +174,52 @@ class LayaRun:
                  "scaler": scaler.state_dict() if scaler is not None else None,
                  "order_rng": order_rng.getstate(), "torch_rng": torch.get_rng_state(),
                  "cuda_rng": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
-                 "numpy_rng": np.random.get_state(), "python_rng": random.getstate(), "progress": progress}
+                 "numpy_rng": np.random.get_state(), "python_rng": random.getstate(), "progress": progress,
+                 "fingerprint": self._fp["hash"]}
         path = self.dir / STATE_FILE
-        if path.exists() and (self.dir / STATE_META).exists():
+        if path.exists() and (self.dir / STATE_META).exists() and not LEAN_CHECKPOINTS:
             # the previous good state stays on disk (renamed, not copied) until the new one is complete
             os.replace(path, self.dir / (STATE_FILE + ".prev"))
             os.replace(self.dir / STATE_META, self.dir / (STATE_META + ".prev"))
+        # lean mode keeps one state: the temp-file + rename write still never leaves it half-written
         digest = _atomic_torch_save(state, path)
         write_json(self.dir / STATE_META, {"sha256": digest, "progress": progress,
                                            "fingerprint": self._fp["hash"], "saved_utc": time.time()})
 
     def load_state(self) -> dict | None:
+        """The newest complete, compatible state; falls back to the previous one.
+
+        Normally `state.json` holds the SHA-256 of `state.pt`. On a synced folder (Google Drive) the
+        two can arrive out of step after an abrupt shutdown: then a state that still loads completely
+        and carries the same fingerprint inside it is accepted, with a warning. Truncated files fail
+        to load and are skipped.
+        """
         for suffix in ("", ".prev"):
             meta = read_json(self.dir / (STATE_META + suffix))
             path = self.dir / (STATE_FILE + suffix)
-            if not meta or not path.exists():
+            if not path.exists():
                 continue
-            if sha256_file(path) != meta["sha256"]:
-                log.error("%s is corrupt or partial (hash mismatch); trying the previous state", path)
+            if meta and meta.get("fingerprint") not in (None, self._fp["hash"]):
+                self._refuse()
+            if meta and sha256_file(path) == meta["sha256"]:
+                return torch.load(path, map_location="cpu", weights_only=False)
+            try:
+                st = torch.load(path, map_location="cpu", weights_only=False)
+            except Exception as e:  # noqa: BLE001 - partial / corrupt file
+                log.error("%s is corrupt or partial (%r); trying the previous state", path, e)
                 continue
-            if meta["fingerprint"] != self._fp["hash"]:
-                old = read_json(self.dir / "fingerprint.json", {})
-                diff = sorted(k for k in self._fp if k != "hash" and old.get(k) != self._fp.get(k))
-                raise ResumeError(f"checkpoint in {self.dir} was made with a different configuration "
-                                  f"(differs in: {diff}). Resume refused; start a new run instead.")
-            return torch.load(path, map_location="cpu", weights_only=False)
+            if st.get("fingerprint") != self._fp["hash"]:
+                self._refuse()
+            log.warning("%s does not match its state.json hash but is a complete state of this run "
+                        "(update %s); using it", path, st["progress"]["global_update"])
+            return st
         return None
+
+    def _refuse(self):
+        old = read_json(self.dir / "fingerprint.json", {})
+        diff = sorted(k for k in self._fp if k != "hash" and old.get(k) != self._fp.get(k))
+        raise ResumeError(f"checkpoint in {self.dir} was made with a different configuration "
+                          f"(differs in: {diff}). Resume refused; start a new run instead.")
 
     # ------------------------------------------------------------------ main
     def train(self, resume: bool = False, overwrite: bool = False) -> dict:
@@ -397,7 +417,8 @@ class LayaRun:
                 model.train()
                 if p.freeze_encoder:
                     model.encoder.eval()
-            self._save_weights(model, tok, cfg_out, self.dir / "checkpoint_latest")
+            if not LEAN_CHECKPOINTS:  # the resume state already holds these weights
+                self._save_weights(model, tok, cfg_out, self.dir / "checkpoint_latest")
             self.save_state(model, optimizer, scheduler, scaler, order_rng, progress)
             self.status(state="running", epoch_completed=epoch + 1, last_checkpoint_update=progress["global_update"])
             if p.early_stopping_patience and progress["bad_epochs"] >= p.early_stopping_patience:
