@@ -34,6 +34,11 @@ def write_comparison_report(dataset: str) -> Path:
         part = tab[tab["split"] == split].sort_values("log_loss")
         if part.empty:
             continue
+        if part["n"].nunique() > 1:
+            lines += [f"> **Warning:** models in this table were scored on different numbers of rows "
+                      f"({', '.join(f'{m}: {n}' for m, n in zip(part['model'], part['n'], strict=True))}). "
+                      "Only rows-equal comparisons are like for like; re-run "
+                      "`evaluate --dataset <name> --checkpoint <run>/final --name laya-<run>` (no --max-rows) to score LAYA on every row.", ""]
         lines += [f"## {split}", "", "| model | n | acc | bal.acc | macro F1 | log loss | Brier | ECE | trades | "
                   "expectancy | win rate | PF | 95% CI per decision |", "|" + "---|" * 13]
         for r in part.itertuples(index=False):
