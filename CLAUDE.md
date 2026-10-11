@@ -13,7 +13,7 @@ endpoints, no exchange keys.**
 ## Commands
 
 ```bash
-uv sync --extra dev                       # environment (cu128 torch on Windows, CPU torch elsewhere)
+uv sync --extra dev                       # environment (cu126 torch on Windows, CPU torch elsewhere)
 uv run pytest -q                          # unit tests (synthetic data + a tiny real LAYA model)
 uv run pytest -q -m network               # optional: tests that hit the public archive
 uv run ruff check src tests               # lint (must pass)

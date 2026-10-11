@@ -51,12 +51,16 @@ class DeviceError(RuntimeError):
 # ----------------------------------------------------------------------------- utilities
 
 def resolve_device(requested: str, profile_name: str, allow_cpu: bool) -> torch.device:
-    if requested == "cuda" or (requested == "auto" and torch.cuda.is_available()):
-        if not torch.cuda.is_available():
+    from ..utils.device import cuda_status
+
+    usable, detail = cuda_status() if (requested in ("cuda", "auto") and torch.cuda.is_available()) \
+        else (False, "no CUDA device visible to PyTorch")
+    if requested == "cuda" or (requested == "auto" and usable):
+        if not usable:
             raise DeviceError(
-                "CUDA was requested but PyTorch cannot use a GPU "
+                f"CUDA was requested but PyTorch cannot use a GPU: {detail} "
                 f"(torch {torch.__version__}, CUDA build {torch.version.cuda}). Fix: install the NVIDIA driver, then "
-                "reinstall the CUDA wheel: `uv sync` (pyproject pins the cu128 index on Windows), and check "
+                "reinstall the CUDA wheel with `uv sync` (pyproject pins the cu126 index on Windows), and check "
                 "`python -m laya_crypto.cli hardware`. Pass --device cpu --allow-cpu to train on CPU deliberately.")
         return torch.device("cuda", 0)
     if requested not in ("auto", "cpu"):

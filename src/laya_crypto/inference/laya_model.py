@@ -22,8 +22,11 @@ class LayaDecisionModel:
         self.checkpoint = Path(checkpoint)
         if not (self.checkpoint / "rl_agent_config.json").exists():
             raise FileNotFoundError(f"{self.checkpoint} is not a LAYA checkpoint (no rl_agent_config.json)")
+        from ..utils.device import default_device
+
         t = time.perf_counter()
-        self.agent = laya.load(str(self.checkpoint), device=device)
+        self.device = device or default_device()  # never a visible-but-unsupported GPU
+        self.agent = laya.load(str(self.checkpoint), device=self.device)
         self.load_seconds = time.perf_counter() - t
         qpath = self.checkpoint / "questions.json"
         self.questions = json.loads(qpath.read_text()) if qpath.exists() else {QUESTION_ID: QUESTION}

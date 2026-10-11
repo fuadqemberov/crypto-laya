@@ -148,3 +148,20 @@ def test_hardware_inspect_runs():
     rep = inspect(".")
     assert {"os", "cpu", "memory", "nvidia", "torch", "disk", "profile"} <= set(rep)
     assert "Hardware report" in to_markdown(rep)
+
+
+def test_visible_but_unsupported_gpu_is_not_used(monkeypatch):
+    import torch
+
+    from laya_crypto.utils import device
+
+    device.cuda_status.cache_clear()
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda i=0: (6, 1))
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda i=0: "NVIDIA GeForce GTX 1050")
+    monkeypatch.setattr(torch.cuda, "get_arch_list", lambda: ["sm_75", "sm_80", "sm_86", "sm_90", "sm_120"])
+    monkeypatch.setattr(torch.version, "cuda", "12.8")
+    ok, why = device.cuda_status()
+    assert not ok and "6.1" in why and "cu126" in why
+    assert device.default_device() == "cpu"
+    device.cuda_status.cache_clear()

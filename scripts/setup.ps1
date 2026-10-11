@@ -10,7 +10,7 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
 }
 uv --version
 
-Write-Host "Creating .venv with Python 3.12 and installing locked dependencies (CUDA 12.8 PyTorch on Windows) ..."
+Write-Host "Creating .venv with Python 3.12 and installing locked dependencies (CUDA 12.6 PyTorch on Windows) ..."
 uv python install 3.12
 uv sync --python 3.12 --extra dev
 if ($LASTEXITCODE -ne 0) { throw "uv sync failed" }

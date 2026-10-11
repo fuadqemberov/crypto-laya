@@ -13,8 +13,10 @@ Everything runs natively on Windows 10/11 x64. WSL2 is **not** required: every d
    nvidia-smi
    ```
 
-   The top-right `CUDA Version` must be **12.8 or higher** for the cu128 wheels this project pins
-   (any driver from early 2025 on). AMD/Intel GPUs: training runs on CPU only (see
+   The top-right `CUDA Version` must be **12.6 or higher** for the cu126 wheels this project pins
+   on Windows. cu126 runs on GTX 10xx (Pascal, e.g. GTX 1050/1060/1080) through RTX 40xx. An
+   **RTX 50xx** needs cu128: in `pyproject.toml` change `pytorch-cu126` to `pytorch-cu128` under
+   `[tool.uv.sources]`, then `uv lock` and `uv sync`. AMD/Intel GPUs: training runs on CPU only (see
    [HARDWARE_REQUIREMENTS.md](HARDWARE_REQUIREMENTS.md)).
 
 2. **Git**:
@@ -58,9 +60,10 @@ uv run python -m laya_crypto.cli hardware    # reports\hardware_report.json + .m
 uv run python -m laya_crypto.cli laya-demo   # downloads + verifies the base checkpoint, runs it once
 ```
 
-`uv sync` installs PyTorch from the `cu128` index on Windows (see `[tool.uv.sources]` in
-`pyproject.toml`). To use an older driver, change that index URL to `cu126` or `cu124`, then run
-`uv lock` and `uv sync` again.
+`uv sync` installs PyTorch from the `cu126` index on Windows (see `[tool.uv.sources]` in
+`pyproject.toml`). The hardware report checks that the installed build really has kernels for your
+GPU (compute capability vs. the build's arch list, then a real kernel launch); a GPU that is visible
+but unsupported is reported and the CPU is used instead of crashing.
 
 Verify CUDA is really usable (the hardware report does a real matrix multiply on the GPU):
 
@@ -74,7 +77,7 @@ uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available
 py -3.12 -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install torch --index-url https://download.pytorch.org/whl/cu128
+pip install torch --index-url https://download.pytorch.org/whl/cu126
 pip install -e ".[dev]"
 ```
 

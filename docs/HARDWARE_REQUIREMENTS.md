@@ -27,6 +27,9 @@ keeps fp32 weights, gradients and two optimizer moments: about 6.7 GB before act
 
 - **NVIDIA ≥ 12 GB** (e.g. RTX 3060 12 GB, 4070, 4080, 4090, 5070 Ti …): full fine-tune with AMP and
   gradient checkpointing at `max_len 512`.
+- **NVIDIA 4 GB (e.g. GTX 1050 / 1650)**: LAYA inference fits (fp32 weights ~1.7 GB). Training only
+  with `freeze_encoder: true`, and slowly; Pascal/Turing GTX cards get no AMP speed-up. Train on
+  Colab and use the laptop for inference and the paper bot.
 - **NVIDIA 8 GB**: full fine-tune is tight. Use the low-VRAM tier and set `freeze_encoder: true` for
   research runs if the OOM probe reaches micro batch 1.
 - **AMD / Intel GPUs**: PyTorch CUDA wheels do not use them. Training runs on the CPU (very slow,

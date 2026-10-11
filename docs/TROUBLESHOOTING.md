@@ -2,7 +2,8 @@
 
 | symptom | cause | fix |
 |---|---|---|
-| `CUDA was requested but PyTorch cannot use a GPU` | CPU-only torch wheel, or driver too old for cu128 | `nvidia-smi` must show CUDA ≥ 12.8; then `uv sync` (Windows pulls the cu128 wheel). Check `uv run python -c "import torch;print(torch.version.cuda, torch.cuda.is_available())"` |
+| `CUDA was requested but PyTorch cannot use a GPU` | CPU-only torch wheel, driver too old, or a GPU the build has no kernels for | `nvidia-smi` must show CUDA ≥ 12.6; then `uv sync` (Windows pulls the cu126 wheel). The message names the cause. |
+| warning `GTX 1050 ... CUDA capability sm_61 is not compatible` | cu128 wheels start at sm_75 | use the cu126 wheels (project default since this fix): `git pull`, `uv sync` |
 | `No usable CUDA device, and the 'research' profile is not run on CPU silently` | as above | fix CUDA, or pass `--allow-cpu` deliberately |
 | `CUDA out of memory at epoch …` | batch too large for the GPU | in `configs/training.yaml` halve `micro_batch` and double `grad_accum`; set `gradient_checkpointing: true`; lower `max_len` only if states fit (~480 tokens); `freeze_encoder: true` as a last resort. Start a new run (`--overwrite`) |
 | OOM already at the probe with micro batch 1 | < 6 GB VRAM for a full fine-tune | `freeze_encoder: true` |

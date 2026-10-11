@@ -140,12 +140,13 @@ def torch_info() -> dict[str, Any]:
                          "multiprocessors": p.multi_processor_count,
                          "bf16_supported": bool(torch.cuda.is_bf16_supported())})
         info["devices"] = devs
-        try:  # a real kernel launch, not just a flag
-            x = torch.randn(256, 256, device="cuda")
-            info["cuda_matmul_ok"] = bool(torch.isfinite(x @ x).all().item())
-        except Exception as e:  # noqa: BLE001
-            info["cuda_matmul_ok"] = False
-            info["cuda_error"] = repr(e)
+        from ..utils.device import cuda_status
+
+        ok, detail = cuda_status()  # capability vs. build arch list, then a real kernel launch
+        info["cuda_matmul_ok"] = ok
+        info["arch_list"] = torch.cuda.get_arch_list()
+        if not ok:
+            info["cuda_error"] = detail
     else:
         info["reason"] = ("PyTorch was built without CUDA" if torch.version.cuda is None
                           else "CUDA build present but no usable device/driver")
@@ -224,8 +225,8 @@ def select_profile(report: dict[str, Any], cfg: HardwareConfig | None = None) ->
                 "notes": ["fp16 disabled: GTX 16xx fp16 is slower than fp32"] if slow_fp16 else []}
     return {"tier": "cpu", "device": "cpu", "micro_batch": 2, "grad_accum": 4, "amp": False,
             "gradient_checkpointing": False, "freeze_encoder_suggested": True, "dataloader_workers": 0,
-            "notes": ["No usable CUDA device: CPU is for smoke tests only. Full runs need --allow-cpu.",
-                      t.get("reason") or ""]}
+            "notes": [n for n in ["No usable CUDA device: CPU is for smoke tests only. Full runs need --allow-cpu.",
+                                  t.get("cuda_error") or t.get("reason")] if n]}
 
 
 def inspect(project_dir: str | Path = ".") -> dict[str, Any]:
